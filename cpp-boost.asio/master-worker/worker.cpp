@@ -47,9 +47,6 @@ public:
 	string Run(string data){
 		return "completed: " + data;
 	}
-
-private:
-
 };
 
 int main(int argc, char* argv[]){
