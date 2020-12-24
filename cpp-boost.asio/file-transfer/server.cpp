@@ -10,6 +10,8 @@ class Server {
 	boost::asio::io_context io_context;
 	std::unique_ptr<tcp::acceptor> ptr_acceptor;
 	std::unique_ptr<tcp::socket> ptr_socket;
+	boost::system::error_code error;
+	//uuid ...
 
 public:
 	Server(const int port){
@@ -29,14 +31,52 @@ public:
 		ptr_socket->close();
 	}
 
+	void SendData(){
+
+	}
+
+	void ReceiveCommand(){
+
+	}
+
+	void SendResponse(){
+		std::string response = "OK";
+		boost::asio::write(*ptr_socket, boost::asio::buffer(response.c_str(), response.size()));
+	}
+
+	void RecevieData(){
+
+	}
+
+	void SendFile(){
+
+	}
+
+	void ReceiveFile(std::string file_name, size_t file_size){
+		std::cout << "File Receive: " << file_name << " (" << file_size << " bytes)\n";
+		size_t cursor = 0;
+		char file_buf[FILE_BUF_SIZE];
+		FILE* fp = fopen(file_name.c_str(), "w+");
+		if(!fp){
+			std::cerr << "File Open Error " << file_name << "\n";
+			return;
+		}
+
+		while(cursor < file_size) {
+			size_t length = ptr_socket->read_some(boost::asio::buffer(file_buf), error);
+			fwrite(file_buf, length, 1, fp);
+			cursor += length;
+		}
+		fclose(fp);
+		std::cout << "File Receive Completed\n";
+	}
+
 	void Run(){
-		const size_t BUF_SIZE = 1024;
-		char data[BUF_SIZE];
-		memset(data, 0x00, BUF_SIZE);
+		char data[COMMAND_BUF_SIZE];
+		memset(data, 0x00, COMMAND_BUF_SIZE);
 
 		try{
 			while(1){
-				boost::system::error_code error;
 				size_t length = ptr_socket->read_some(boost::asio::buffer(data), error);
 				if(error == boost::asio::error::eof){
 					break;
@@ -45,41 +85,18 @@ public:
 				}
 
 				Protocol* protocol = (Protocol*) data;
-				if(protocol->GetCommand() == Command::SEND) {
-					std::cout << "Send\n";
-					SendProtocol* send_protocol = (SendProtocol*) protocol;
-					std::cout << "file size: "<<send_protocol->GetFileSize() << "\n";
-					std::cout << "file name: "<<send_protocol->GetFileName() << "\n";
+				switch(protocol->GetCommand()){
+					case Command::SEND:
+						SendProtocol* send_protocol = (SendProtocol*) protocol;
 
-					std::string response = "ok";
-					boost::asio::write(*ptr_socket, boost::asio::buffer(response.c_str(), response.size()));
-					std::cout << "file transfer start: receive\n";
+						SendResponse();
 
-					size_t cursor = 0;
-					char file_buf[1024*1024*2];
-					const char* filename = send_protocol->GetFileName().c_str();
-					FILE* fp = fopen(filename, "w+");
-					if(!fp){
-						std::cout << "file open error " << filename << "\n";
+						std::string file_name = send_protocol->GetFileName();
+						size_t file_size = send_protocol->GetFileSize();
+
+						ReceiveFile(file_name, file_size);
 						break;
-					}
-
-					while(cursor < send_protocol->GetFileSize()) {
-						size_t length = ptr_socket->read_some(boost::asio::buffer(file_buf), error);
-						fwrite(file_buf, length, 1, fp);
-						cursor += length;
-					}
-					fclose(fp);
-					std::cout << cursor << " file transfer complete\n";
 				}
-				else
-					std::cout << "Etc\n";
-//				data[length] = NULL;
-//				std::cout << "Message from Master: " << data << std::endl;
-//
-//				std::string res = std::string("response: ") + data;
-//
-//				boost::asio::write(*ptr_socket, boost::asio::buffer(res.c_str(), BUF_SIZE));
 			}
 		}catch(std::exception& e){
 			std::cerr << "Exception in Worker: " << e.what() << std::endl;
@@ -96,7 +113,6 @@ int main(int argc, char* argv[]) {
 	while(1) {
 		Server server(atoi(argv[1]));
 		server.Run();
-
 	}
 	return 0;
 }
